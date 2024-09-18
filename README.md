@@ -1,2 +1,661 @@
-# python_homework
-养老服务管理系统
+### 养老服务管理系统详细介绍文档
+
+#### 项目背景
+
+养老服务管理系统旨在通过信息化手段，提高养老服务管理的效率和质量。该系统使用 Tkinter 作为前端界面，MySQL 作为后端数据库，实现了老人信息和服务信息的管理。系统主要功能包括老人信息的添加、删除、更新、查询和排序，以及服务信息的管理。
+
+#### 功能介绍
+
+系统主要分为以下几个模块：
+
+1. **主页面**：提供进入不同管理页面的入口。
+2. **老人管理页面**：添加、删除、更新、查询和排序老人信息。
+3. **服务管理页面**：添加、删除、更新、查询和排序服务信息。
+4. **老人注册页面**：用于添加新的老人信息。
+5. **服务记录页面**：记录具体的服务信息。
+6. **员工管理页面**：管理员工信息。
+7. **启动页面**：显示欢迎信息或导航。
+
+#### 实现细节
+
+每个模块的实现细节如下：
+
+##### 1. 主页面 (`admin_page.py`)
+
+**功能**：
+
+- 提供进入不同管理页面的入口。
+
+**实现原理**：
+
+- 使用 Tkinter 创建一个主窗口，包含两个按钮，分别进入老人管理页面和服务管理页面。
+- 当用户点击按钮时，调用相应的方法，销毁当前窗口并打开相应的管理页面。
+
+**实现步骤**：
+
+1. 创建 Tkinter 主窗口。
+2. 在窗口中添加两个按钮，分别绑定到 `open_elder_management` 和 `open_service_management` 方法。
+3. 在方法中，销毁当前窗口，并实例化相应的管理页面类。
+
+```python
+import tkinter as tk
+from elder_management_page import ElderManagementPage
+from service_management_page import ServiceManagementPage
+
+class AdminPage:
+    def __init__(self, window):
+        self.window = window
+        self.window.title("养老服务管理系统")
+        self.window.geometry("300x200")
+
+        tk.Button(self.window, text="老人管理", command=self.open_elder_management).pack(pady=20)
+        tk.Button(self.window, text="服务管理", command=self.open_service_management).pack(pady=20)
+
+    def open_elder_management(self):
+        ElderManagementPage(self.window)
+
+    def open_service_management(self):
+        ServiceManagementPage(self.window)
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = AdminPage(root)
+    root.mainloop()
+```
+
+##### 2. 数据库配置 (`db.py`)
+
+**功能**：
+
+- 负责与 MySQL 数据库建立连接。
+
+**实现原理**：
+
+- 使用 `mysql.connector` 模块配置数据库连接参数（如主机、用户名、密码、数据库名），并提供一个函数 `connect_db()` 返回数据库连接对象。
+- 其他模块调用 `connect_db()` 函数获取数据库连接，执行 SQL 操作。
+
+**实现步骤**：
+
+1. 安装 `mysql-connector-python` 库。
+2. 创建 `connect_db` 函数，配置数据库连接参数并返回连接对象。
+
+```python
+import mysql.connector
+
+def connect_db():
+    return mysql.connector.connect(
+        host="localhost",
+        user="root",
+        password="123",
+        database="elder_care"
+    )
+```
+
+##### 3. 老人信息管理页面 (`elder_management_page.py`)
+
+**功能**：
+
+- 添加、删除、更新、查询和排序老人信息。
+- 撤销操作。
+
+**实现原理**：
+
+**1. 添加老人信息**：
+
+- 用户输入老人信息后，点击“添加老人”按钮。
+- 验证输入的编号是否为整数，且不能为空。
+- 使用数据库连接检查编号是否已存在。
+- 若编号不存在，则将输入信息插入数据库。
+
+**实现步骤**：
+
+1. 获取用户输入的信息。
+2. 验证编号是否为整数且不为空。
+3. 连接数据库，检查编号是否存在。
+4. 若编号不存在，则执行插入操作，并显示成功信息。
+
+```python
+def add_elder(self):
+    elder_id = self.entry_id.get()
+    name = self.entry_name.get()
+    gender = self.entry_gender.get()
+    age = self.entry_age.get()
+    health_status = self.entry_health_status.get()
+
+    if not elder_id.isdigit():
+        messagebox.showerror("错误", "编号必须是整数")
+        return
+
+    if not elder_id or not name:
+        messagebox.showerror("错误", "编号和姓名不能为空")
+        return
+
+    db = connect_db()
+    cursor = db.cursor()
+    try:
+        cursor.execute("SELECT * FROM elder_k WHERE id = %s", (elder_id,))
+        existing_elder = cursor.fetchone()
+        if existing_elder:
+            messagebox.showerror("错误", "该编号已存在")
+        else:
+            cursor.execute("INSERT INTO elder_k (id, name, gender, age, health_status) VALUES (%s, %s, %s, %s, %s)",
+                           (elder_id, name, gender, age, health_status))
+            db.commit()
+            messagebox.showinfo("成功", "添加成功")
+            self.display_elders()
+    except Exception as e:
+        db.rollback()
+        messagebox.showerror("错误", str(e))
+    finally:
+        cursor.close()
+        db.close()
+```
+
+**2. 删除老人信息**：
+
+- 用户选择要删除的老人信息，点击“删除老人”按钮。
+- 获取选中行的编号，将对应的老人信息从数据库中删除。
+- 删除前，将该记录保存到撤销栈，以便后续撤销操作。
+
+**实现步骤**：
+
+1. 获取选中的老人信息。
+2. 从数据库中删除该信息。
+3. 删除前，将该信息保存到撤销栈。
+
+```python
+def delete_elder(self):
+    selected_item = self.tree.selection()
+    if not selected_item:
+        messagebox.showerror("错误", "请先选择一个老人")
+        return
+
+    elder_id = self.tree.item(selected_item[0])['values'][0]
+
+    db = connect_db()
+    cursor = db.cursor()
+    cursor.execute("SELECT * FROM elder_k WHERE id = %s", (elder_id,))
+    record = cursor.fetchone()
+    undo_stack.append(("insert", record))
+
+    cursor.execute("DELETE FROM elder_k WHERE id = %s", (elder_id,))
+    db.commit()
+    db.close()
+    messagebox.showinfo("成功", "老人信息删除成功！")
+    self.display_elders()
+```
+
+**3. 更新老人信息**：
+
+- 用户修改老人信息后，点击“更新老人信息”按钮。
+- 验证输入的编号是否为整数。
+- 获取选中行的编号，将对应的老人信息更新到数据库。
+- 更新前，将旧记录保存到撤销栈。
+
+**实现步骤**：
+
+1. 获取用户输入的修改信息。
+2. 验证编号是否为整数。
+3. 连接数据库，更新老人信息。
+4. 更新前，将旧记录保存到撤销栈。
+
+```python
+def update_elder(self):
+    elder_id = self.entry_id.get()
+    name = self.entry_name.get()
+    gender = self.entry_gender.get()
+    age = self.entry_age.get()
+    health_status = self.entry_health_status.get()
+
+    if not elder_id.isdigit():
+        messagebox.showerror("错误", "编号必须是整数")
+        return
+
+    db = connect_db()
+    cursor = db.cursor()
+    cursor.execute("SELECT * FROM elder_k WHERE id = %s", (elder_id,))
+    old_record = cursor.fetchone()
+    undo_stack.append(("update", old_record))
+
+    cursor.execute("""
+        UPDATE elder_k
+        SET name = %s, gender = %s, age = %s, health_status = %s
+        WHERE id = %s
+    """, (name, gender, age, health_status, elder_id))
+    db.commit()
+    db.close()
+    messagebox.showinfo("成功", "老人信息更新成功！")
+    self.display_elders()
+```
+
+**4. 查询老人信息**：
+
+- 用户输入编号后，点击“查询老人信息”按钮。
+- 验证输入的编号是否为整数。
+- 根据输入的编号，从数据库中查询对应的老人信息并显示在输入框中。
+
+**实现步骤**：
+
+1. 获取用户输入的编号。
+2. 验证编号是否为整数。
+3. 连接数据库，查询老人信息。
+4. 将查询到的信息显示在输入框中。
+
+```python
+def query_elder(self):
+    elder_id = self.entry_id.get()
+
+    if not elder_id.isdigit():
+        messagebox.showerror("错误", "编号必须是整数")
+        return
+
+    db = connect_db()
+    cursor = db.cursor()
+    cursor.execute("SELECT * FROM elder_k WHERE id = %s", (elder_id,))
+    record = cursor.fetchone()
+    db.close()
+
+    if record:
+        self.entry_name.delete(0, END)
+        self.entry_name.insert(0, record[1])
+        self.entry_gender.delete(0, END)
+        self.entry_gender.insert(0, record[2])
+        self.entry_age.delete(0, END)
+        self.entry_age.insert(0, record[3])
+        self.entry_health_status.delete(0, END)
+        self.entry_health_status.insert(0, record[4])
+    else:
+        messagebox.showinfo("信息", "未找到老人信息")
+```
+
+**5. 排序老人信息**：
+
+- 用户点击列标题时，触发排序功能。
+- 若点击编号列，按整数
+
+排序；若点击其他列，按字符串排序。
+
+**实现步骤**：
+
+1. 在列标题绑定点击事件。
+2. 获取所有行的数据。
+3. 根据点击的列进行排序。
+4. 重新排列行。
+
+```python
+def treeview_sort_column(self, tv, col, reverse):
+    # 处理数值列的排序
+    try:
+        l = [(int(tv.set(k, col)), k) for k in tv.get_children('')] if col == "编号" else [(tv.set(k, col), k) for k in tv.get_children('')]
+    except ValueError:
+        l = [(tv.set(k, col), k) for k in tv.get_children('')]
+
+    l.sort(reverse=reverse)
+
+    for index, (val, k) in enumerate(l):
+        tv.move(k, '', index)
+
+    tv.heading(col, command=lambda: self.treeview_sort_column(tv, col, not reverse))
+```
+
+**6. 操作撤销功能**：
+
+- 用户点击“撤销操作”按钮。
+- 从撤销栈中弹出最后一个操作，根据其类型（删除、插入或更新）执行相应的撤销操作。
+
+**实现步骤**：
+
+1. 检查撤销栈是否为空。
+2. 弹出撤销栈中的最后一个操作。
+3. 根据操作类型，执行相应的撤销操作。
+
+```python
+def undo(self):
+    if not undo_stack:
+        messagebox.showinfo("信息", "没有可以撤销的操作")
+        return
+
+    last_action = undo_stack.pop()
+    db = connect_db()
+    cursor = db.cursor()
+
+    if last_action[0] == "delete":
+        cursor.execute("DELETE FROM elder_k WHERE id = %s", (last_action[1],))
+    elif last_action[0] == "insert":
+        record = last_action[1]
+        cursor.execute("INSERT INTO elder_k (id, name, gender, age, health_status) VALUES (%s, %s, %s, %s, %s)",
+                    (record[0], record[1], record[2], record[3], record[4]))
+    elif last_action[0] == "update":
+        record = last_action[1]
+        cursor.execute("""
+            UPDATE elder_k
+            SET name = %s, gender = %s, age = %s, health_status = %s
+            WHERE id = %s
+        """, (record[1], record[2], record[3], record[4], record[0]))
+
+    db.commit()
+    db.close()
+    self.display_elders()
+```
+
+**7. 返回功能**：
+
+- 用户点击“返回”按钮，返回到主页面。
+
+**实现步骤**：
+
+1. 销毁当前窗口。
+2. 重新显示主页面。
+
+```python
+def back(self):
+    AdminPage(self.window)
+```
+
+#### 4. 服务管理页面 (`service_management_page.py`)
+
+**功能**：
+
+- 添加、删除、更新、查询和排序服务信息。
+
+**实现原理**：
+
+**1. 添加服务信息**：
+
+- 用户输入服务信息后，点击“添加服务”按钮。
+- 验证输入的编号是否为整数，且不能为空。
+- 使用数据库连接检查编号是否已存在。
+- 若编号不存在，则将输入信息插入数据库。
+
+**实现步骤**：
+
+1. 获取用户输入的信息。
+2. 验证编号是否为整数且不为空。
+3. 连接数据库，检查编号是否存在。
+4. 若编号不存在，则执行插入操作，并显示成功信息。
+
+```python
+def add_service(self):
+    service_id = self.entry_id.get()
+    name = self.entry_name.get()
+    description = self.entry_description.get()
+
+    if not service_id.isdigit():
+        messagebox.showerror("错误", "编号必须是整数")
+        return
+
+    if not service_id or not name:
+        messagebox.showerror("错误", "编号和服务名称不能为空")
+        return
+
+    db = connect_db()
+    cursor = db.cursor()
+    try:
+        cursor.execute("SELECT * FROM services_k WHERE id = %s", (service_id,))
+        existing_service = cursor.fetchone()
+        if existing_service:
+            messagebox.showerror("错误", "该编号已存在")
+        else:
+            cursor.execute("INSERT INTO services_k (id, service_name, description) VALUES (%s, %s, %s)",
+                           (service_id, name, description))
+            db.commit()
+            messagebox.showinfo("成功", "添加成功")
+            self.display_services()
+    except Exception as e:
+        db.rollback()
+        messagebox.showerror("错误", str(e))
+    finally:
+        cursor.close()
+        db.close()
+```
+
+**2. 删除服务信息**：
+
+- 用户选择要删除的服务信息，点击“删除服务”按钮。
+- 获取选中行的编号，将对应的服务信息从数据库中删除。
+
+**实现步骤**：
+
+1. 获取选中的服务信息。
+2. 从数据库中删除该信息。
+
+```python
+def delete_service(self):
+    selected_item = self.tree.selection()
+    if not selected_item:
+        messagebox.showerror("错误", "请先选择一个服务")
+        return
+
+    service_id = self.tree.item(selected_item[0])['values'][0]
+
+    db = connect_db()
+    cursor = db.cursor()
+    cursor.execute("DELETE FROM services_k WHERE id = %s", (service_id,))
+    db.commit()
+    db.close()
+    messagebox.showinfo("成功", "服务信息删除成功！")
+    self.display_services()
+```
+
+**3. 更新服务信息**：
+
+- 用户修改服务信息后，点击“更新服务信息”按钮。
+- 验证输入的编号是否为整数。
+- 获取选中行的编号，将对应的服务信息更新到数据库。
+
+**实现步骤**：
+
+1. 获取用户输入的修改信息。
+2. 验证编号是否为整数。
+3. 连接数据库，更新服务信息。
+
+```python
+def update_service(self):
+    service_id = self.entry_id.get()
+    name = self.entry_name.get()
+    description = self.entry_description.get()
+
+    if not service_id.isdigit():
+        messagebox.showerror("错误", "编号必须是整数")
+        return
+
+    db = connect_db()
+    cursor = db.cursor()
+    cursor.execute("UPDATE services_k SET service_name = %s, description = %s WHERE id = %s",
+                   (name, description, service_id))
+    db.commit()
+    db.close()
+    messagebox.showinfo("成功", "服务信息更新成功！")
+    self.display_services()
+```
+
+**4. 查询服务信息**：
+
+- 用户输入编号后，点击“查询服务信息”按钮。
+- 验证输入的编号是否为整数。
+- 根据输入的编号，从数据库中查询对应的服务信息并显示在输入框中。
+
+**实现步骤**：
+
+1. 获取用户输入的编号。
+2. 验证编号是否为整数。
+3. 连接数据库，查询服务信息。
+4. 将查询到的信息显示在输入框中。
+
+```python
+def query_service(self):
+    service_id = self.entry_id.get()
+
+    if not service_id.isdigit():
+        messagebox.showerror("错误", "编号必须是整数")
+        return
+
+    db = connect_db()
+    cursor = db.cursor()
+    cursor.execute("SELECT * FROM services_k WHERE id = %s", (service_id,))
+    record = cursor.fetchone()
+    db.close()
+
+    if record:
+        self.entry_name.delete(0, END)
+        self.entry_name.insert(0, record[1])
+        self.entry_description.delete(0, END)
+        self.entry_description.insert(0, record[2])
+    else:
+        messagebox.showinfo("信息", "未找到服务信息")
+```
+
+**5. 排序服务信息**：
+
+- 用户点击列标题时，触发排序功能。
+- 若点击编号列，按整数排序；若点击其他列，按字符串排序。
+
+**实现步骤**：
+
+1. 在列标题绑定点击事件。
+2. 获取所有行的数据。
+3. 根据点击的列进行排序。
+4. 重新排列行。
+
+```python
+def treeview_sort_column(self, tv, col, reverse):
+    # 处理数值列的排序
+    try:
+        l = [(int(tv.set(k, col)), k) for k in tv.get_children('')] if col == "编号" else [(tv.set(k, col), k) for k in tv.get_children('')]
+    except ValueError:
+        l = [(tv.set(k, col), k) for k in tv.get_children('')]
+
+    l.sort(reverse=reverse)
+
+    for index, (val, k) in enumerate(l):
+        tv.move(k, '', index)
+
+    tv.heading(col, command=lambda: self.treeview_sort_column(tv, col, not reverse))
+```
+
+**6. 返回功能**：
+
+- 用户点击“返回”按钮，返回到主页面。
+
+**实现步骤**：
+
+1. 销毁当前窗口。
+2. 重新显示主页面。
+
+```python
+def back(self):
+    self.window.destroy()
+    self.parent_window.deiconify()
+```
+
+### 养老服务管理系统介绍文档（续）
+
+##### 5. 老人页面 (`elder_page.py`)
+
+**功能**：
+
+- 显示和管理具体的老人信息。
+
+**实现原理**：
+
+- 使用 Tkinter 创建一个窗口，用于显示详细的老人信息。
+- 该页面可能提供一些额外的操作，比如导出数据、查看历史记录等。
+
+**实现步骤**：
+
+1. 创建 Tkinter 窗口，显示老人详细信息。
+2. 提供额外的操作按钮（如导出数据、查看历史
+
+记录）。
+
+3. 实现相应的功能逻辑。
+
+##### 6. 老人注册页面 (`elder_register_page.py`)
+
+**功能**：
+
+- 添加新的老人信息。
+
+**实现原理**：
+
+- 用户输入新的老人信息后，点击“注册”按钮。
+- 验证输入的信息是否完整和有效。
+- 使用数据库连接将新的老人信息插入数据库。
+
+**实现步骤**：
+
+1. 获取用户输入的信息。
+2. 验证输入的信息是否完整和有效。
+3. 连接数据库，将新的老人信息插入数据库。
+4. 显示成功或错误信息。
+
+##### 7. 项目主入口 (`main.py`)
+
+**功能**：
+
+- 启动应用程序，展示主页面。
+
+**实现原理**：
+
+- 创建 Tkinter 主窗口实例，并实例化 `AdminPage` 类。
+- 启动 Tkinter 主循环以保持应用程序运行。
+
+**实现步骤**：
+
+1. 创建 Tkinter 主窗口实例。
+2. 实例化 `AdminPage` 类。
+3. 启动 Tkinter 主循环。
+
+##### 8. 服务记录页面 (`service_records_page.py`)
+
+**功能**：
+
+- 记录服务的具体信息。
+
+**实现原理**：
+
+- 创建一个窗口，用户可以输入服务记录的具体信息。
+- 将这些记录保存到数据库中，以便后续查询和分析。
+
+**实现步骤**：
+
+1. 创建 Tkinter 窗口，显示服务记录输入框。
+2. 用户输入服务记录后，点击保存按钮。
+3. 连接数据库，将服务记录保存到数据库。
+4. 显示成功或错误信息。
+
+##### 9. 员工管理页面 (`staff_management_page.py`)
+
+**功能**：
+
+- 管理员工信息。
+
+**实现原理**：
+
+- 创建一个窗口，用户可以添加、删除、更新和查询员工信息。
+- 通过数据库连接执行相应的 SQL 操作，将员工信息保存到数据库。
+
+**实现步骤**：
+
+1. 创建 Tkinter 窗口，显示员工信息输入框。
+2. 提供添加、删除、更新和查询按钮。
+3. 连接数据库，执行相应的 SQL 操作。
+4. 显示成功或错误信息。
+
+##### 10. 启动页面 (`start_page.py`)
+
+**功能**：
+
+- 显示欢迎信息或导航。
+
+**实现原理**：
+
+- 创建一个启动窗口，显示欢迎信息和导航选项。
+- 用户可以通过这个页面进入主页面或其他功能页面。
+
+**实现步骤**：
+
+1. 创建 Tkinter 启动窗口。
+2. 显示欢迎信息和导航按钮。
+3. 用户点击导航按钮，进入主页面或其他功能页面。
+
